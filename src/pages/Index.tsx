@@ -23,6 +23,7 @@ const Index = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<PromptTemplate | null>(null);
   const [customPrompt, setCustomPrompt] = useState('');
   const [savedPrompts, setSavedPrompts] = useState<PromptTemplate[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   const promptTemplates: PromptTemplate[] = [
     {
@@ -85,11 +86,13 @@ const Index = () => {
 
   const categories = Array.from(new Set(promptTemplates.map(p => p.category)));
 
-  const filteredTemplates = promptTemplates.filter(template =>
-    template.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    template.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    template.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredTemplates = promptTemplates.filter(template => {
+    const matchesSearch = template.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      template.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      template.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategory === 'all' || template.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
 
   const favoritePrompts = savedPrompts.filter(p => p.isFavorite);
 
@@ -127,6 +130,47 @@ const Index = () => {
       toast.success('Промт создан и сохранён!');
       setCustomPrompt('');
     }
+  };
+
+  const handleExportPrompts = () => {
+    if (savedPrompts.length === 0) {
+      toast.error('Нет промтов для экспорта');
+      return;
+    }
+
+    const dataStr = JSON.stringify(savedPrompts, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `prompts_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success('Промты экспортированы!');
+  };
+
+  const handleImportPrompts = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const imported = JSON.parse(e.target?.result as string);
+        if (Array.isArray(imported)) {
+          setSavedPrompts([...savedPrompts, ...imported]);
+          toast.success(`Импортировано ${imported.length} промтов!`);
+        } else {
+          toast.error('Неверный формат файла');
+        }
+      } catch (error) {
+        toast.error('Ошибка чтения файла');
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
   };
 
   return (
@@ -210,8 +254,24 @@ const Index = () => {
               </div>
 
               <div className="flex flex-wrap gap-2">
+                <Badge
+                  onClick={() => setSelectedCategory('all')}
+                  variant={selectedCategory === 'all' ? 'default' : 'secondary'}
+                  className={`text-sm px-4 py-2 cursor-pointer hover:scale-105 transition-transform ${
+                    selectedCategory === 'all' ? 'gradient-primary text-white' : ''
+                  }`}
+                >
+                  Все
+                </Badge>
                 {categories.map(category => (
-                  <Badge key={category} variant="secondary" className="text-sm px-4 py-2 cursor-pointer hover:scale-105 transition-transform">
+                  <Badge
+                    key={category}
+                    onClick={() => setSelectedCategory(category)}
+                    variant={selectedCategory === category ? 'default' : 'secondary'}
+                    className={`text-sm px-4 py-2 cursor-pointer hover:scale-105 transition-transform ${
+                      selectedCategory === category ? 'gradient-primary text-white' : ''
+                    }`}
+                  >
                     {category}
                   </Badge>
                 ))}
@@ -270,8 +330,41 @@ const Index = () => {
           <TabsContent value="library" className="animate-fade-in">
             <Card className="shadow-lg border-0 bg-white/90 backdrop-blur">
               <CardHeader>
-                <CardTitle className="text-2xl">Моя библиотека</CardTitle>
-                <CardDescription>Все сохранённые промты в одном месте</CardDescription>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-2xl">Моя библиотека</CardTitle>
+                    <CardDescription>Все сохранённые промты в одном месте</CardDescription>
+                  </div>
+                  {savedPrompts.length > 0 && (
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleExportPrompts}
+                        className="flex items-center gap-2"
+                      >
+                        <Icon name="Download" size={16} />
+                        Экспорт
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => document.getElementById('import-file')?.click()}
+                        className="flex items-center gap-2"
+                      >
+                        <Icon name="Upload" size={16} />
+                        Импорт
+                      </Button>
+                      <input
+                        id="import-file"
+                        type="file"
+                        accept=".json"
+                        onChange={handleImportPrompts}
+                        className="hidden"
+                      />
+                    </div>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {savedPrompts.length === 0 ? (
