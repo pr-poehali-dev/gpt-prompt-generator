@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 
 interface PromptTemplate {
   id: string;
@@ -15,6 +17,8 @@ interface PromptTemplate {
   description: string;
   template: string;
   isFavorite?: boolean;
+  usageCount?: number;
+  lastUsed?: string;
 }
 
 const Index = () => {
@@ -24,6 +28,9 @@ const Index = () => {
   const [customPrompt, setCustomPrompt] = useState('');
   const [savedPrompts, setSavedPrompts] = useState<PromptTemplate[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [editingPrompt, setEditingPrompt] = useState<PromptTemplate | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editTemplate, setEditTemplate] = useState('');
 
   const promptTemplates: PromptTemplate[] = [
     {
@@ -96,14 +103,22 @@ const Index = () => {
 
   const favoritePrompts = savedPrompts.filter(p => p.isFavorite);
 
-  const handleCopyPrompt = (template: string) => {
+  const handleCopyPrompt = (template: string, promptId?: string) => {
     navigator.clipboard.writeText(template);
     toast.success('Промт скопирован в буфер обмена!');
+    
+    if (promptId) {
+      setSavedPrompts(savedPrompts.map(p => 
+        p.id === promptId 
+          ? { ...p, usageCount: (p.usageCount || 0) + 1, lastUsed: new Date().toISOString() }
+          : p
+      ));
+    }
   };
 
   const handleSavePrompt = (prompt: PromptTemplate) => {
     if (!savedPrompts.find(p => p.id === prompt.id)) {
-      setSavedPrompts([...savedPrompts, prompt]);
+      setSavedPrompts([...savedPrompts, { ...prompt, usageCount: 0 }]);
       toast.success('Промт сохранён в библиотеку!');
     } else {
       toast.info('Промт уже в библиотеке');
@@ -125,11 +140,37 @@ const Index = () => {
         category: 'Пользовательские',
         description: customPrompt.substring(0, 50) + '...',
         template: customPrompt,
+        usageCount: 0,
       };
       setSavedPrompts([...savedPrompts, newPrompt]);
       toast.success('Промт создан и сохранён!');
       setCustomPrompt('');
     }
+  };
+
+  const handleEditPrompt = (prompt: PromptTemplate) => {
+    setEditingPrompt(prompt);
+    setEditTitle(prompt.title);
+    setEditTemplate(prompt.template);
+  };
+
+  const handleSaveEdit = () => {
+    if (editingPrompt && editTitle.trim() && editTemplate.trim()) {
+      setSavedPrompts(savedPrompts.map(p =>
+        p.id === editingPrompt.id
+          ? { ...p, title: editTitle, template: editTemplate, description: editTemplate.substring(0, 50) + '...' }
+          : p
+      ));
+      toast.success('Промт обновлён!');
+      setEditingPrompt(null);
+      setEditTitle('');
+      setEditTemplate('');
+    }
+  };
+
+  const handleDeletePrompt = (id: string) => {
+    setSavedPrompts(savedPrompts.filter(p => p.id !== id));
+    toast.success('Промт удалён');
   };
 
   const handleExportPrompts = () => {
@@ -186,6 +227,54 @@ const Index = () => {
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             Готовые шаблоны промтов для ChatGPT. Создавай, сохраняй и используй лучшие промты для любых задач
           </p>
+          
+          {savedPrompts.length > 0 && (
+            <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
+              <Card className="border-0 bg-white/90 backdrop-blur shadow-md">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                      <Icon name="FileText" size={20} className="text-white" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{savedPrompts.length}</p>
+                      <p className="text-sm text-muted-foreground">Всего промтов</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="border-0 bg-white/90 backdrop-blur shadow-md">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center">
+                      <Icon name="Heart" size={20} className="text-white" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{savedPrompts.filter(p => p.isFavorite).length}</p>
+                      <p className="text-sm text-muted-foreground">В избранном</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="border-0 bg-white/90 backdrop-blur shadow-md">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+                      <Icon name="TrendingUp" size={20} className="text-white" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">
+                        {savedPrompts.reduce((sum, p) => sum + (p.usageCount || 0), 0)}
+                      </p>
+                      <p className="text-sm text-muted-foreground">Использований</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </header>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
@@ -380,9 +469,17 @@ const Index = () => {
                         <CardHeader>
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
-                              <Badge variant="outline" className="text-xs mb-2">
-                                {prompt.category}
-                              </Badge>
+                              <div className="flex items-center gap-2 mb-2">
+                                <Badge variant="outline" className="text-xs">
+                                  {prompt.category}
+                                </Badge>
+                                {prompt.usageCount !== undefined && prompt.usageCount > 0 && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    <Icon name="MousePointerClick" size={12} className="mr-1" />
+                                    {prompt.usageCount}
+                                  </Badge>
+                                )}
+                              </div>
                               <CardTitle className="text-base">{prompt.title}</CardTitle>
                             </div>
                             <Button
@@ -402,14 +499,35 @@ const Index = () => {
                           <div className="bg-muted/50 p-3 rounded text-sm line-clamp-4">
                             {prompt.template}
                           </div>
-                          <Button
-                            size="sm"
-                            onClick={() => handleCopyPrompt(prompt.template)}
-                            className="w-full gradient-primary hover:opacity-90"
-                          >
-                            <Icon name="Copy" size={16} className="mr-2" />
-                            Копировать
-                          </Button>
+                          {prompt.lastUsed && (
+                            <p className="text-xs text-muted-foreground">
+                              Использован: {new Date(prompt.lastUsed).toLocaleDateString('ru-RU')}
+                            </p>
+                          )}
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleCopyPrompt(prompt.template, prompt.id)}
+                              className="flex-1 gradient-primary hover:opacity-90"
+                            >
+                              <Icon name="Copy" size={16} className="mr-1" />
+                              Копировать
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleEditPrompt(prompt)}
+                            >
+                              <Icon name="Pencil" size={16} />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleDeletePrompt(prompt.id)}
+                            >
+                              <Icon name="Trash2" size={16} />
+                            </Button>
+                          </div>
                         </CardContent>
                       </Card>
                     ))}
@@ -555,6 +673,46 @@ const Index = () => {
             </Card>
           </TabsContent>
         </Tabs>
+
+        <Dialog open={!!editingPrompt} onOpenChange={(open) => !open && setEditingPrompt(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Редактировать промт</DialogTitle>
+              <DialogDescription>
+                Измени название и содержание промта
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-title">Название</Label>
+                <Input
+                  id="edit-title"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="Название промта"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-template">Промт</Label>
+                <Textarea
+                  id="edit-template"
+                  value={editTemplate}
+                  onChange={(e) => setEditTemplate(e.target.value)}
+                  placeholder="Текст промта"
+                  className="min-h-[200px]"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditingPrompt(null)}>
+                Отмена
+              </Button>
+              <Button onClick={handleSaveEdit} className="gradient-primary">
+                Сохранить
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
