@@ -31,6 +31,7 @@ const Index = () => {
   const [editingPrompt, setEditingPrompt] = useState<PromptTemplate | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editTemplate, setEditTemplate] = useState('');
+  const [librarySearchQuery, setLibrarySearchQuery] = useState('');
 
   const promptTemplates: PromptTemplate[] = [
     {
@@ -102,6 +103,11 @@ const Index = () => {
   });
 
   const favoritePrompts = savedPrompts.filter(p => p.isFavorite);
+  const topPrompts = [...savedPrompts].sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0)).slice(0, 5);
+  const filteredLibraryPrompts = savedPrompts.filter(prompt => 
+    prompt.title.toLowerCase().includes(librarySearchQuery.toLowerCase()) ||
+    prompt.template.toLowerCase().includes(librarySearchQuery.toLowerCase())
+  );
 
   const handleCopyPrompt = (template: string, promptId?: string) => {
     navigator.clipboard.writeText(template);
@@ -463,8 +469,52 @@ const Index = () => {
                     <p className="text-sm">Сохраняйте промты из генератора для быстрого доступа</p>
                   </div>
                 ) : (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {savedPrompts.map((prompt) => (
+                  <>
+                    <div className="mb-4">
+                      <div className="relative">
+                        <Icon name="Search" size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          type="text"
+                          placeholder="Поиск по библиотеке..."
+                          value={librarySearchQuery}
+                          onChange={(e) => setLibrarySearchQuery(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                    </div>
+
+                    {topPrompts.length > 0 && librarySearchQuery === '' && (
+                      <div className="mb-6">
+                        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                          <Icon name="TrendingUp" size={18} className="text-purple-600" />
+                          Топ используемых промтов
+                        </h3>
+                        <div className="space-y-2">
+                          {topPrompts.map((prompt) => (
+                            <div key={prompt.id} className="flex items-center gap-3 p-2 rounded bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-100">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{prompt.title}</p>
+                                <p className="text-xs text-muted-foreground">{prompt.category}</p>
+                              </div>
+                              <Badge variant="secondary" className="text-xs shrink-0">
+                                <Icon name="MousePointerClick" size={12} className="mr-1" />
+                                {prompt.usageCount}
+                              </Badge>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleCopyPrompt(prompt.template, prompt.id)}
+                              >
+                                <Icon name="Copy" size={16} />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {filteredLibraryPrompts.map((prompt) => (
                       <Card key={prompt.id} className="border bg-white hover:shadow-md transition-shadow">
                         <CardHeader>
                           <div className="flex items-start justify-between">
@@ -532,6 +582,7 @@ const Index = () => {
                       </Card>
                     ))}
                   </div>
+                  </>
                 )}
               </CardContent>
             </Card>
